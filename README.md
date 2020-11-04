@@ -1,5 +1,5 @@
 <!--
- * @Author: your name
+ * @Author: Amous Qiu
  * @Date: 2020-11-04 14:52:08
  * @LastEditTime: 2020-11-04 14:55:58
  * @LastEditors: Please set LastEditors
@@ -14,10 +14,12 @@ For installation instructions see https://github.com/openai/gym/blob/master/docs
 ## Install this environment
 
 - Clone this repository
-- Install Package: pip install -e gym-lunar-lander-custom
+- Install Package: 
+>> pip install -e gym-lunar-lander-custom
 - Python3
->> import gym
+>> import gym  
 >> env = gym.make('gym_lunarlander_custom:CustomLunarLander-v0')
 
 ## Example using this environment
-python train.py --env gym_lunarlander_custom:CustomLunarLander-v0 --verbose true
+E.g.
+>> python train.py --env gym_lunarlander_custom:CustomLunarLander-v0 --verbose true
