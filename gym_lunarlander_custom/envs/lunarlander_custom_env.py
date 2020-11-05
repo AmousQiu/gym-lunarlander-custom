@@ -135,7 +135,7 @@ class CustomLunarLanderEnv(gym.Env, EzPickle):
         self.prev_shaping = None
 
         W = VIEWPORT_W/SCALE
-        H = VIEWPORT_H/SCALE
+        H = VIEWPORT_H/SCALE/2
 
         # terrain
         CHUNKS = 11
