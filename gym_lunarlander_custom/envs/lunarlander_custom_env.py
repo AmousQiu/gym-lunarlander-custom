@@ -95,8 +95,9 @@ class CustomLunarLanderEnv(gym.Env, EzPickle):
         self.moon = None
         self.lander = None
         self.particles = []
-
         self.prev_reward = None
+        self.ratio = 4
+        self.initial_x = 10
 
         # useful range is -1 .. +1, but spikes can be higher
         self.observation_space = spaces.Box(-np.inf, np.inf, shape=(8,), dtype=np.float32)
@@ -115,6 +116,12 @@ class CustomLunarLanderEnv(gym.Env, EzPickle):
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
+
+    def ratio_update(self,ratio):
+        self.ratio = ratio
+
+    def x_update(self,x):
+        self.initial_x = x
 
     def _destroy(self):
         if not self.moon: return
@@ -135,22 +142,30 @@ class CustomLunarLanderEnv(gym.Env, EzPickle):
         self.prev_shaping = None
 
         W = VIEWPORT_W/SCALE
-        H = VIEWPORT_H/SCALE/2
 
+        #W /= 2
+        H = VIEWPORT_H/SCALE
+        
         # terrain
         CHUNKS = 11
         height = self.np_random.uniform(0, H/2, size=(CHUNKS+1,))
         chunk_x = [W/(CHUNKS-1)*i for i in range(CHUNKS)]
-        self.helipad_x1 = chunk_x[CHUNKS//2-1]
-        self.helipad_x2 = chunk_x[CHUNKS//2+1]
-        self.helipad_y = H/4
+
+        
+        self.helipad_x1 = chunk_x[CHUNKS//2-1] 
+        self.helipad_x2 = chunk_x[CHUNKS//2+1] 
+        
+        #self.helipad_y = H/4
+        self.helipad_y = H/self.ratio
+
+
         height[CHUNKS//2-2] = self.helipad_y
         height[CHUNKS//2-1] = self.helipad_y
         height[CHUNKS//2+0] = self.helipad_y
         height[CHUNKS//2+1] = self.helipad_y
         height[CHUNKS//2+2] = self.helipad_y
         smooth_y = [0.33*(height[i-1] + height[i+0] + height[i+1]) for i in range(CHUNKS)]
-
+        
         self.moon = self.world.CreateStaticBody(shapes=edgeShape(vertices=[(0, 0), (W, 0)]))
         self.sky_polys = []
         for i in range(CHUNKS-1):
@@ -166,8 +181,11 @@ class CustomLunarLanderEnv(gym.Env, EzPickle):
         self.moon.color2 = (0.0, 0.0, 0.0)
 
         initial_y = VIEWPORT_H/SCALE
+
+        #For width change
+        #initial_x = VIEWPORT_W/SCALE/4 #2
         self.lander = self.world.CreateDynamicBody(
-            position=(VIEWPORT_W/SCALE/2, initial_y),
+            position=(self.initial_x, initial_y),
             angle=0.0,
             fixtures = fixtureDef(
                 shape=polygonShape(vertices=[(x/SCALE, y/SCALE) for x, y in LANDER_POLY]),
@@ -187,7 +205,7 @@ class CustomLunarLanderEnv(gym.Env, EzPickle):
         self.legs = []
         for i in [-1, +1]:
             leg = self.world.CreateDynamicBody(
-                position=(VIEWPORT_W/SCALE/2 - i*LEG_AWAY/SCALE, initial_y),
+                position=(self.initial_x- i*LEG_AWAY/SCALE, initial_y),
                 angle=(i * 0.05),
                 fixtures=fixtureDef(
                     shape=polygonShape(box=(LEG_W/SCALE, LEG_H/SCALE)),
@@ -383,72 +401,4 @@ class CustomLunarLanderEnv(gym.Env, EzPickle):
 
 class CustomLunarLanderContinuous(CustomLunarLanderEnv):
     continuous = True
-'''
-def heuristic(env, s):
-    """
-    The heuristic for
-    1. Testing
-    2. Demonstration rollout.
-
-    Args:
-        env: The environment
-        s (list): The state. Attributes:
-                  s[0] is the horizontal coordinate
-                  s[1] is the vertical coordinate
-                  s[2] is the horizontal speed
-                  s[3] is the vertical speed
-                  s[4] is the angle
-                  s[5] is the angular speed
-                  s[6] 1 if first leg has contact, else 0
-                  s[7] 1 if second leg has contact, else 0
-    returns:
-         a: The heuristic to be fed into the step function defined above to determine the next step and reward.
-    """
-
-    angle_targ = s[0]*0.5 + s[2]*1.0         # angle should point towards center
-    if angle_targ > 0.4: angle_targ = 0.4    # more than 0.4 radians (22 degrees) is bad
-    if angle_targ < -0.4: angle_targ = -0.4
-    hover_targ = 0.55*np.abs(s[0])           # target y should be proportional to horizontal offset
-
-    angle_todo = (angle_targ - s[4]) * 0.5 - (s[5])*1.0
-    hover_todo = (hover_targ - s[1])*0.5 - (s[3])*0.5
-
-    if s[6] or s[7]:  # legs have contact
-        angle_todo = 0
-        hover_todo = -(s[3])*0.5  # override to reduce fall speed, that's all we need after contact
-
-    if env.continuous:
-        a = np.array([hover_todo*20 - 1, -angle_todo*20])
-        a = np.clip(a, -1, +1)
-    else:
-        a = 0
-        if hover_todo > np.abs(angle_todo) and hover_todo > 0.05: a = 2
-        elif angle_todo < -0.05: a = 3
-        elif angle_todo > +0.05: a = 1
-    return a
-
-def demo_heuristic_lander(env, seed=None, render=False):
-    env.seed(seed)
-    total_reward = 0
-    steps = 0
-    s = env.reset()
-    while True:
-        a = heuristic(env, s)
-        s, r, done, info = env.step(a)
-        total_reward += r
-
-        if render:
-            still_open = env.render()
-            if still_open == False: break
-
-        if steps % 20 == 0 or done:
-            print("observations:", " ".join(["{:+0.2f}".format(x) for x in s]))
-            print("step {} total_reward {:+0.2f}".format(steps, total_reward))
-        steps += 1
-        if done: break
-    return total_reward
-
-
-if __name__ == '__main__':
-    demo_heuristic_lander(LunarLander(), render=True)
-'''
+#
